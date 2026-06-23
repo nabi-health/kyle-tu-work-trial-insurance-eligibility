@@ -71,6 +71,45 @@ body {
   letter-spacing: -0.01em;
 }
 
+/*
+  Type scale — Brand Guidelines › Typography (Figma node 45:347).
+  Gilroy (font-display) for Titles, Labels and Subheadings; Inter (font-sans)
+  for Paragraphs. Each class is self-contained (family + size + line-height +
+  tracking + weight) so one class fully styles an element. Letter-spacing is
+  the Figma %-of-em value (e.g. -1% → -0.01em, 6% → 0.06em). All Titles render
+  Gilroy SemiBold 600. Full reference: docs/brand-typography.md.
+*/
+
+/* Titles — Gilroy / SemiBold 600 */
+.type-title-h1 { font-family: var(--font-display); font-size: 56px; line-height: 64px; letter-spacing: -0.01em;  font-weight: 600; }
+.type-title-h2 { font-family: var(--font-display); font-size: 48px; line-height: 56px; letter-spacing: -0.01em;  font-weight: 600; }
+.type-title-h3 { font-family: var(--font-display); font-size: 40px; line-height: 48px; letter-spacing: -0.01em;  font-weight: 600; }
+.type-title-h4 { font-family: var(--font-display); font-size: 36px; line-height: 40px; letter-spacing: -0.005em; font-weight: 600; }
+.type-title-h5 { font-family: var(--font-display); font-size: 24px; line-height: 32px; letter-spacing: 0;        font-weight: 600; }
+.type-title-h6 { font-family: var(--font-display); font-size: 20px; line-height: 28px; letter-spacing: 0;        font-weight: 600; }
+
+/* Labels — Gilroy (SemiBold 600, except sm-light = Medium 500) */
+.type-label-xl       { font-family: var(--font-display); font-size: 24px; line-height: 32px; letter-spacing: -0.015em; font-weight: 600; }
+.type-label-lg       { font-family: var(--font-display); font-size: 18px; line-height: 24px; letter-spacing: -0.015em; font-weight: 600; }
+.type-label-md       { font-family: var(--font-display); font-size: 16px; line-height: 24px; letter-spacing: -0.011em; font-weight: 600; }
+.type-label-sm       { font-family: var(--font-display); font-size: 14px; line-height: 20px; letter-spacing: -0.006em; font-weight: 600; }
+.type-label-sm-light { font-family: var(--font-display); font-size: 16px; line-height: 20px; letter-spacing: -0.006em; font-weight: 500; }
+.type-label-xs       { font-family: var(--font-display); font-size: 12px; line-height: 16px; letter-spacing: 0;        font-weight: 600; }
+
+/* Paragraphs — Inter (body) */
+.type-body-xl        { font-family: var(--font-sans); font-size: 24px; line-height: 32px; letter-spacing: -0.015em; font-weight: 400; }
+.type-body-lg        { font-family: var(--font-sans); font-size: 18px; line-height: 26px; letter-spacing: -0.015em; font-weight: 400; }
+.type-body-lg-medium { font-family: var(--font-sans); font-size: 18px; line-height: 24px; letter-spacing: -0.015em; font-weight: 500; }
+.type-body-md        { font-family: var(--font-sans); font-size: 16px; line-height: 24px; letter-spacing: -0.011em; font-weight: 400; }
+.type-body-sm        { font-family: var(--font-sans); font-size: 14px; line-height: 20px; letter-spacing: -0.006em; font-weight: 400; }
+.type-body-xs        { font-family: var(--font-sans); font-size: 12px; line-height: 16px; letter-spacing: 0;        font-weight: 400; }
+
+/* Subheadings — Gilroy / SemiBold 600, UPPERCASE, wide positive tracking */
+.type-subhead-md  { font-family: var(--font-display); font-size: 16px; line-height: 24px; letter-spacing: 0.06em; font-weight: 600; text-transform: uppercase; }
+.type-subhead-sm  { font-family: var(--font-display); font-size: 14px; line-height: 20px; letter-spacing: 0.06em; font-weight: 600; text-transform: uppercase; }
+.type-subhead-xs  { font-family: var(--font-display); font-size: 12px; line-height: 16px; letter-spacing: 0.04em; font-weight: 600; text-transform: uppercase; }
+.type-subhead-2xs { font-family: var(--font-display); font-size: 11px; line-height: 12px; letter-spacing: 0.02em; font-weight: 600; text-transform: uppercase; }
+
 /* Thin, branded scrollbars inside scroll regions */
 .scroll-area {
   scrollbar-width: thin;
