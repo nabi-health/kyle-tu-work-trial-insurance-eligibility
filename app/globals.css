@@ -1,0 +1,99 @@
+@import "tailwindcss";
+
+/*
+  Nabi brand design tokens.
+  Source: Brand Guidelines (Figma) + work-trial spec quick reference.
+  Tailwind v4 reads these under @theme and generates utilities
+  (bg-primary, text-ink, border-filler, font-display, …).
+*/
+@theme {
+  /* Brand palette */
+  --color-primary: #3843d0;
+  --color-primary-600: #2f39b4;
+  --color-primary-700: #262e95;
+  --color-secondary: #8ea1ff;
+  --color-filler: #d1d9ff;
+  --color-cream: #fdf8f2;
+  --color-ink: #0a0a0a;
+
+  /* Neutrals (warm, tuned to the cream surface) */
+  --color-surface: #ffffff;
+  --color-canvas: #fdf8f2;
+  --color-line: #ece6dc;
+  --color-line-strong: #ddd5c8;
+  --color-muted: #6b6760;
+  --color-subtle: #908b82;
+
+  /* Brand accent palette (Figma: Accent/*) */
+  --color-accent-green: #33c759;
+  --color-accent-orange: #fe9900;
+  --color-accent-yellow: #fece00;
+  --color-accent-blue: #00a3fe;
+  --color-accent-pink: #fe76b8;
+
+  /* Semantic status — derived from the brand accents, deepened for legible
+     text-on-tint while solid fills keep the vivid brand hue. (No brand red
+     exists, so danger uses a harmonized red for the critical "not eligible".) */
+  --color-success: #1c9c47;
+  --color-success-bg: #e7f7ed;
+  --color-danger: #d23b34;
+  --color-danger-bg: #fbe7e5;
+  --color-warning: #c2740a;
+  --color-warning-bg: #fdefd5;
+  --color-info: #3843d0;
+  --color-info-bg: #e7e9fb;
+
+  /* Type */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-inter), ui-sans-serif, sans-serif;
+
+  /* Radii */
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+}
+
+html {
+  height: 100%;
+}
+
+body {
+  min-height: 100%;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Display/headline font for headings and brand marks */
+.font-display {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Thin, branded scrollbars inside scroll regions */
+.scroll-area {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) transparent;
+}
+
+/* Focus ring shared across interactive primitives */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-result {
+  animation: fade-in-up 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
