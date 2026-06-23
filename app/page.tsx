@@ -29,12 +29,12 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <>
+    <div className="flex min-h-screen flex-col">
       <PageHeader
         title="Dashboard"
         subtitle="Welcome to the Nabi insurance registry. Check a patient, review coverage, or manage rules."
       />
-      <PageBody className="flex flex-col gap-8">
+      <PageBody className="flex flex-1 flex-col gap-8">
         <section className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {stats.map((s) => (
             <Card key={s.label} className="px-5 py-4">
@@ -48,8 +48,8 @@ export default async function DashboardPage() {
 
         <DashboardChatHero />
 
-        <DashboardCharacters />
+        <DashboardCharacters className="mt-auto" />
       </PageBody>
-    </>
+    </div>
   );
 }
