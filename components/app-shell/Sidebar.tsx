@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NabiMark } from "@/components/brand/NabiMark";
+import { cn } from "@/lib/cn";
 
 type NavItem = {
   href: string;
@@ -12,6 +14,18 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
+  {
+    href: "/",
+    label: "Dashboard",
+    description: "Overview",
+    icon: (
+      <>
+        <path d="M3 9.5 12 3l9 6.5" />
+        <path d="M5 9.5V21h14V9.5" />
+        <path d="M9.5 21v-6h5v6" />
+      </>
+    ),
+  },
   {
     href: "/check",
     label: "Eligibility Check",
@@ -50,37 +64,71 @@ const NAV: NavItem[] = [
   },
 ];
 
+function isActive(pathname: string, href: string) {
+  if (href === "/") return pathname === "/";
+  return pathname === href || pathname.startsWith(href + "/");
+}
+
 export function Sidebar() {
   const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Auto-collapse to an icon rail on narrower viewports; a manual toggle still
+  // works within a breakpoint until the next crossing.
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1100px)");
+    const apply = () => setCollapsed(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-surface px-4 py-6 md:flex">
-      <Link href="/check" className="mb-8 flex items-center gap-2.5 px-2">
-        <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary">
+    <aside
+      className={cn(
+        "sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface px-3 py-6 transition-[width] duration-200 md:flex",
+        collapsed ? "w-[76px] items-center" : "w-64",
+      )}
+    >
+      {/* Brand */}
+      <Link
+        href="/"
+        className={cn(
+          "mb-8 flex items-center gap-2.5",
+          collapsed ? "justify-center px-0" : "px-2",
+        )}
+        title="Nabi Registry"
+      >
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary">
           <NabiMark className="h-5 w-5 text-white" />
         </span>
-        <span className="flex flex-col leading-tight">
-          <span className="font-display text-[15px] font-semibold text-ink">
-            Nabi Registry
+        {!collapsed && (
+          <span className="flex flex-col leading-tight">
+            <span className="font-display text-[15px] font-semibold text-ink">
+              Nabi Registry
+            </span>
+            <span className="text-xs text-subtle">Eligibility admin</span>
           </span>
-          <span className="text-xs text-subtle">Eligibility admin</span>
-        </span>
+        )}
       </Link>
 
-      <nav className="flex flex-col gap-1">
+      {/* Nav */}
+      <nav className="flex w-full flex-col gap-1">
         {NAV.map((item) => {
-          const active =
-            pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = isActive(pathname, item.href);
           return (
             <Link
               key={item.href}
               href={item.href}
               aria-current={active ? "page" : undefined}
-              className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors ${
+              title={collapsed ? item.label : undefined}
+              className={cn(
+                "group flex items-center gap-3 rounded-xl py-2.5 transition-colors",
+                collapsed ? "justify-center px-0" : "px-3",
                 active
                   ? "bg-primary text-white"
-                  : "text-muted hover:bg-filler/40 hover:text-ink"
-              }`}
+                  : "text-muted hover:bg-filler/40 hover:text-ink",
+              )}
             >
               <svg
                 viewBox="0 0 24 24"
@@ -93,25 +141,47 @@ export function Sidebar() {
               >
                 {item.icon}
               </svg>
-              <span className="flex flex-col leading-tight">
-                <span className="text-sm font-medium">{item.label}</span>
-                <span
-                  className={`text-xs ${
-                    active ? "text-white/70" : "text-subtle"
-                  }`}
-                >
-                  {item.description}
+              {!collapsed && (
+                <span className="flex flex-col leading-tight">
+                  <span className="text-sm font-medium">{item.label}</span>
+                  <span
+                    className={cn(
+                      "text-xs",
+                      active ? "text-white/70" : "text-subtle",
+                    )}
+                  >
+                    {item.description}
+                  </span>
                 </span>
-              </span>
+              )}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto rounded-xl bg-cream px-3 py-3 text-xs leading-relaxed text-muted ring-1 ring-line">
-        Internal tool. Rule changes take effect immediately for every eligibility
-        check.
-      </div>
+      {/* Collapse toggle */}
+      <button
+        onClick={() => setCollapsed((c) => !c)}
+        title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        className={cn(
+          "focus-ring mt-auto flex items-center gap-2 rounded-xl py-2 text-xs font-medium text-subtle transition-colors hover:bg-filler/40 hover:text-ink",
+          collapsed ? "justify-center px-0" : "px-3",
+        )}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={cn("h-4 w-4 transition-transform", collapsed && "rotate-180")}
+        >
+          <path d="m15 18-6-6 6-6" />
+        </svg>
+        {!collapsed && "Collapse"}
+      </button>
     </aside>
   );
 }
