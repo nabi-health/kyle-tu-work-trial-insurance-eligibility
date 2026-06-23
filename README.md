@@ -61,3 +61,5 @@ supabase/       schema migration + one-paste setup.sql
 ## Design
 
 Brand tokens (Nabi Visual Identity): primary blue `#3843d0`, secondary `#8ea1ff`, filler `#d1d9ff`, cream `#fdf8f2`, near-black `#0a0a0a`, accent green/orange/blue/pink/yellow. Headlines use a Gilroy stand-in (Poppins via `next/font` — swap to local Gilroy woff2s in `app/layout.tsx`); body uses Inter.
+
+Figma source files and per-page node links: [`docs/brand-figma.md`](docs/brand-figma.md).
