@@ -4,44 +4,19 @@ import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { deleteRuleAction } from "@/app/rules/actions";
+import { RuleValidationDialog } from "@/components/rules/RuleValidationDialog";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Dialog } from "@/components/ui/Dialog";
-import { Input, Select } from "@/components/ui/Field";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Input } from "@/components/ui/Field";
+import { MatrixTable, type MatrixColumn } from "@/components/ui/MatrixTable";
 import { OUTCOME_KEYS, OUTCOME_LABELS } from "@/lib/eligibility/constants";
 import { outcomeTone } from "@/lib/eligibility/presentation";
 import type { OutcomeKey, Rule } from "@/lib/eligibility/types";
 
-type SortKey = "payer_group" | "plan_type" | "plan_structure" | "service_state";
-
 const display = (v: string) => (v.trim() === "*" || v === "" ? "Any" : v);
 const opt = (v: string) => ({ value: v, label: v });
-
-type SortState = { key: SortKey; dir: 1 | -1 };
-
-function SortHeader({
-  k,
-  label,
-  sort,
-  onSort,
-}: {
-  k: SortKey;
-  label: string;
-  sort: SortState;
-  onSort: (k: SortKey) => void;
-}) {
-  return (
-    <button
-      onClick={() => onSort(k)}
-      className="flex items-center gap-1 font-medium text-muted hover:text-ink"
-    >
-      {label}
-      {sort.key === k && (
-        <span className="text-[10px]">{sort.dir === 1 ? "▲" : "▼"}</span>
-      )}
-    </button>
-  );
-}
 
 export function RulesTable({ rules }: { rules: Rule[] }) {
   const router = useRouter();
@@ -50,11 +25,8 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
   const [state, setState] = useState("");
   const [planType, setPlanType] = useState("");
   const [structure, setStructure] = useState("");
-  const [sort, setSort] = useState<SortState>({
-    key: "payer_group",
-    dir: 1,
-  });
-  const [target, setTarget] = useState<Rule | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const { payerOpts, stateOpts, typeOpts, structureOpts } = useMemo(() => {
@@ -90,28 +62,17 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
           return false;
       }
       if (q) {
-        const hay = [
-          r.payer_group,
-          r.payer_id,
-          r.plan_type,
-          r.plan_structure,
-          r.service_state,
-          r.notes,
-        ]
+        const hay = Object.entries(r)
+          .filter(([k]) => k !== "id")
+          .map(([, v]) => v)
           .join(" ")
           .toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
-    return [...out].sort(
-      (a, b) => a[sort.key].localeCompare(b[sort.key]) * sort.dir,
-    );
-  }, [rules, search, payer, state, planType, structure, sort]);
-
-  function toggleSort(key: SortKey) {
-    setSort((s) => (s.key === key ? { key, dir: s.dir === 1 ? -1 : 1 } : { key, dir: 1 }));
-  }
+    return out;
+  }, [rules, search, payer, state, planType, structure]);
 
   function clearFilters() {
     setSearch("");
@@ -121,17 +82,121 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
     setStructure("");
   }
 
+  const selectedRules = useMemo(
+    () => rules.filter((r) => selected.has(r.id)),
+    [rules, selected],
+  );
+
+  function toggleRow(rule: Rule) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(rule.id)) next.delete(rule.id);
+      else next.add(rule.id);
+      return next;
+    });
+  }
+
+  function toggleAll(visible: Rule[]) {
+    setSelected((prev) => {
+      const allSelected = visible.every((r) => prev.has(r.id));
+      const next = new Set(prev);
+      if (allSelected) visible.forEach((r) => next.delete(r.id));
+      else visible.forEach((r) => next.add(r.id));
+      return next;
+    });
+  }
+
+  function editSelected() {
+    const [only] = [...selected];
+    if (only) router.push(`/rules/${only}`);
+  }
+
   function confirmDelete() {
-    if (!target) return;
-    const id = target.id;
+    const ids = [...selected];
+    if (ids.length === 0) return;
     startTransition(async () => {
-      await deleteRuleAction(id);
-      setTarget(null);
+      await Promise.all(ids.map((id) => deleteRuleAction(id)));
+      setSelected(new Set());
+      setConfirmingDelete(false);
       router.refresh();
     });
   }
 
   const hasFilters = search || payer || state || planType || structure;
+  const selectedCount = selected.size;
+
+  const columns = useMemo<MatrixColumn<Rule>[]>(
+    () => [
+      {
+        key: "payer_group",
+        header: "Payer",
+        align: "left",
+        sortValue: (r) => r.payer_group.trim().toLowerCase(),
+        cell: (r) => (
+          <>
+            {display(r.payer_group)}
+            {r.payer_id.trim() !== "*" && r.payer_id.trim() !== "" && (
+              <span className="block type-body-xs text-subtle">{r.payer_id}</span>
+            )}
+          </>
+        ),
+      },
+      {
+        key: "plan_type",
+        header: "Type",
+        align: "left",
+        sortValue: (r) => r.plan_type.trim().toLowerCase(),
+        cell: (r) => <span className="text-muted">{display(r.plan_type)}</span>,
+      },
+      {
+        key: "plan_structure",
+        header: "Structure",
+        align: "left",
+        sortValue: (r) => r.plan_structure.trim().toLowerCase(),
+        cell: (r) => <span className="text-muted">{display(r.plan_structure)}</span>,
+      },
+      {
+        key: "service_state",
+        header: "State",
+        align: "left",
+        width: 150,
+        clip: true,
+        sortValue: (r) => r.service_state.trim().toLowerCase(),
+        cell: (r) => (
+          <span className="text-muted" title={r.service_state}>
+            {display(r.service_state)}
+          </span>
+        ),
+      },
+      ...OUTCOME_KEYS.map<MatrixColumn<Rule>>((k) => ({
+        key: k,
+        header: OUTCOME_LABELS[k],
+        align: "left",
+        width: 200,
+        sortValue: (r) => display(r[k]).toLowerCase(),
+        cell: (r) => (
+          <Badge tone={outcomeTone(k as OutcomeKey, r[k])}>{display(r[k])}</Badge>
+        ),
+      })),
+      {
+        key: "notes",
+        header: "Notes",
+        align: "left",
+        width: 200,
+        clip: true,
+        sortValue: (r) => r.notes.trim().toLowerCase(),
+        cell: (r) =>
+          r.notes.trim() ? (
+            <span className="text-muted" title={r.notes}>
+              {r.notes}
+            </span>
+          ) : (
+            <span className="text-subtle/60">—</span>
+          ),
+      },
+    ],
+    [],
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -139,26 +204,27 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[200px] flex-1">
           <Input
-            placeholder="Search payer, ID, notes…"
+            size="sm"
+            placeholder="Search all fields…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <div className="w-40">
-          <Select placeholder="Payer" options={payerOpts} value={payer}
-            onChange={(e) => setPayer(e.target.value)} />
+          <Dropdown size="sm" placeholder="Payer" options={payerOpts} value={payer}
+            onChange={setPayer} />
         </div>
         <div className="w-32">
-          <Select placeholder="State" options={stateOpts} value={state}
-            onChange={(e) => setState(e.target.value)} />
+          <Dropdown size="sm" placeholder="State" options={stateOpts} value={state}
+            onChange={setState} />
         </div>
         <div className="w-40">
-          <Select placeholder="Plan type" options={typeOpts} value={planType}
-            onChange={(e) => setPlanType(e.target.value)} />
+          <Dropdown size="sm" placeholder="Plan type" options={typeOpts} value={planType}
+            onChange={setPlanType} />
         </div>
         <div className="w-36">
-          <Select placeholder="Structure" options={structureOpts} value={structure}
-            onChange={(e) => setStructure(e.target.value)} />
+          <Dropdown size="sm" placeholder="Structure" options={structureOpts} value={structure}
+            onChange={setStructure} />
         </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters}>
@@ -167,107 +233,111 @@ export function RulesTable({ rules }: { rules: Rule[] }) {
         )}
       </div>
 
-      <p className="text-xs text-subtle">
-        {filtered.length} of {rules.length} rules
-      </p>
-
-      {/* Table */}
-      <div className="scroll-area overflow-x-auto rounded-2xl border border-line bg-surface">
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-line bg-cream/50 text-left text-xs">
-              <th className="px-4 py-3"><SortHeader k="payer_group" label="Payer" sort={sort} onSort={toggleSort} /></th>
-              <th className="px-4 py-3"><SortHeader k="plan_type" label="Type" sort={sort} onSort={toggleSort} /></th>
-              <th className="px-4 py-3"><SortHeader k="plan_structure" label="Structure" sort={sort} onSort={toggleSort} /></th>
-              <th className="px-4 py-3"><SortHeader k="service_state" label="State" sort={sort} onSort={toggleSort} /></th>
-              {OUTCOME_KEYS.map((k) => (
-                <th key={k} className="px-4 py-3 font-medium text-muted">
-                  {OUTCOME_LABELS[k]}
-                </th>
-              ))}
-              <th className="px-4 py-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((r) => (
-              <tr
-                key={r.id}
-                onClick={() => router.push(`/rules/${r.id}`)}
-                className="group cursor-pointer border-b border-line last:border-0 hover:bg-filler/20"
+      {/* Toolbar: row count, or actions for the current selection */}
+      <div className="flex min-h-8 items-center justify-between gap-3">
+        {selectedCount > 0 ? (
+          <>
+            <p className="type-label-sm text-ink">
+              {selectedCount} selected
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={editSelected}
+                disabled={selectedCount !== 1}
+                title={
+                  selectedCount === 1
+                    ? "Edit the selected rule"
+                    : "Select a single rule to edit"
+                }
               >
-                <td className="px-4 py-3 font-medium text-ink">
-                  {display(r.payer_group)}
-                  {r.payer_id.trim() !== "*" && r.payer_id.trim() !== "" && (
-                    <span className="block text-xs font-normal text-subtle">
-                      {r.payer_id}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-muted">{display(r.plan_type)}</td>
-                <td className="px-4 py-3 text-muted">{display(r.plan_structure)}</td>
-                <td className="max-w-[160px] truncate px-4 py-3 text-muted" title={r.service_state}>
-                  {display(r.service_state)}
-                </td>
-                {OUTCOME_KEYS.map((k) => (
-                  <td key={k} className="px-4 py-3">
-                    <Badge tone={outcomeTone(k as OutcomeKey, r[k])}>{display(r[k])}</Badge>
-                  </td>
-                ))}
-                <td className="px-4 py-3 text-right">
-                  <div className="flex justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                    <Link
-                      href={`/rules/${r.id}`}
-                      onClick={(e) => e.stopPropagation()}
-                      className="rounded-lg px-2 py-1 text-[13px] font-medium text-primary hover:bg-filler/40"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setTarget(r);
-                      }}
-                      className="rounded-lg px-2 py-1 text-[13px] font-medium text-danger hover:bg-danger-bg"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
-              <tr>
-                <td colSpan={9} className="px-4 py-12 text-center text-sm text-subtle">
-                  No rules match these filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                Edit
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setConfirmingDelete(true)}
+              >
+                Delete
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSelected(new Set())}
+              >
+                Clear
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="type-body-xs text-subtle">
+              {filtered.length} of {rules.length} rules
+            </p>
+            <div className="flex items-center gap-2">
+              <RuleValidationDialog />
+              <Link href="/rules/new">
+                <Button size="sm">+ New rule</Button>
+              </Link>
+            </div>
+          </>
+        )}
       </div>
 
+      {/* Table */}
+      <MatrixTable
+        rows={filtered}
+        columns={columns}
+        rowKey={(r) => r.id}
+        onRowClick={(r) => router.push(`/rules/${r.id}`)}
+        defaultSort={{ key: "payer_group", dir: "asc" }}
+        emptyMessage="No rules match these filters."
+        // Fill the space left under the header/filters/toolbar so the table
+        // scrolls internally and the page itself never overflows the viewport.
+        maxHeight="calc(100vh - 16rem)"
+        selectedKeys={selected}
+        onToggleRow={toggleRow}
+        onToggleAll={toggleAll}
+      />
+
       <Dialog
-        open={target !== null}
-        onClose={() => setTarget(null)}
-        title="Delete this rule?"
+        open={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title={
+          selectedCount === 1 ? "Delete this rule?" : `Delete ${selectedCount} rules?`
+        }
         footer={
           <>
-            <Button variant="ghost" onClick={() => setTarget(null)}>
+            <Button variant="ghost" onClick={() => setConfirmingDelete(false)}>
               Cancel
             </Button>
             <Button variant="danger" onClick={confirmDelete} disabled={pending}>
-              {pending ? "Deleting…" : "Delete rule"}
+              {pending
+                ? "Deleting…"
+                : selectedCount === 1
+                  ? "Delete rule"
+                  : `Delete ${selectedCount} rules`}
             </Button>
           </>
         }
       >
-        {target && (
+        {selectedCount === 1 ? (
           <p>
             This permanently removes the rule for{" "}
-            <span className="font-medium text-ink">{display(target.payer_group)}</span>{" "}
-            ({display(target.plan_type)} · {display(target.plan_structure)} ·{" "}
-            {display(target.service_state)}). Future eligibility checks will no
-            longer use it.
+            <span className="font-medium text-ink">
+              {display(selectedRules[0].payer_group)}
+            </span>{" "}
+            ({display(selectedRules[0].plan_type)} ·{" "}
+            {display(selectedRules[0].plan_structure)} ·{" "}
+            {display(selectedRules[0].service_state)}). Future eligibility checks
+            will no longer use it.
+          </p>
+        ) : (
+          <p>
+            This permanently removes{" "}
+            <span className="font-medium text-ink">{selectedCount} rules</span>.
+            Future eligibility checks will no longer use them.
           </p>
         )}
       </Dialog>

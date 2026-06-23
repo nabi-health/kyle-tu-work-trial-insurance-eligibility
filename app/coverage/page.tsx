@@ -14,7 +14,7 @@ export default async function CoveragePage() {
     <>
       <PageHeader
         title="Coverage Overview"
-        subtitle="What Nabi can service at a glance, by payer and plan structure. Change the state or plan type to explore."
+        subtitle="Every coverage rule and its outcomes. Opens with no filters (all data); narrow by state, plan type, or payer to explore."
       />
       <PageBody>
         <CoverageMatrix rules={rules} payerGroups={payerGroups} />

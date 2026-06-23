@@ -24,6 +24,12 @@
   --color-muted: #6b6760;
   --color-subtle: #908b82;
 
+  /* Opaque row states. Sticky columns can't use translucent tints (cells
+     scrolled underneath would show through), so these are filler / primary
+     tints pre-composited on the white surface. */
+  --color-row-hover: #e8ecff; /* filler @ ~50% */
+  --color-row-selected: #f3f3fa; /* primary @ 5% */
+
   /* Brand accent palette (Figma: Accent/*) */
   --color-accent-green: #33c759;
   --color-accent-orange: #fe9900;
@@ -42,6 +48,13 @@
   --color-warning-bg: #fdefd5;
   --color-info: #3843d0;
   --color-info-bg: #e7e9fb;
+
+  /* Form controls — Figma: Brand Guidelines › Inputs (node 69:37) */
+  --color-field-border: rgba(142, 161, 255, 0.2); /* secondary @ 20% */
+  --color-field-label: #404040; /* neutral/700 */
+  --color-field-placeholder: #a1a1a1; /* neutral/400 */
+  --color-field-hint: #737373; /* neutral/500 */
+  --color-field-error: #ff696a; /* highlight/red */
 
   /* Type */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -113,7 +126,42 @@ body {
 /* Thin, branded scrollbars inside scroll regions */
 .scroll-area {
   scrollbar-width: thin;
+  scrollbar-color: var(--color-line-strong) #ffffff;
+}
+
+/* WebKit: thumb on a white track. */
+.scroll-area::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-area::-webkit-scrollbar-track {
+  background: #ffffff;
+}
+/* Square where the horizontal + vertical bars meet (matrix table has both). */
+.scroll-area::-webkit-scrollbar-corner {
+  background: #ffffff;
+}
+.scroll-area::-webkit-scrollbar-thumb {
+  background-color: var(--color-line-strong);
+  border-radius: 9999px;
+}
+
+/* Same thin thumb, but on a transparent track (no background). */
+.scroll-area-bare {
+  scrollbar-width: thin;
   scrollbar-color: var(--color-line-strong) transparent;
+}
+.scroll-area-bare::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-area-bare::-webkit-scrollbar-track,
+.scroll-area-bare::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.scroll-area-bare::-webkit-scrollbar-thumb {
+  background-color: var(--color-line-strong);
+  border-radius: 9999px;
 }
 
 /* Focus ring shared across interactive primitives */

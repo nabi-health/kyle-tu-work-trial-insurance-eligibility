@@ -1,3 +1,6 @@
+"use client";
+
+import React, { useId } from "react";
 import { cn } from "@/lib/cn";
 
 export function Field({
@@ -5,6 +8,7 @@ export function Field({
   htmlFor,
   hint,
   error,
+  required,
   className,
   children,
 }: {
@@ -12,96 +16,104 @@ export function Field({
   htmlFor?: string;
   hint?: string;
   error?: string;
+  required?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
+  const autoId = useId();
+  const fieldId = htmlFor ?? autoId;
+  const labelId = `${fieldId}-label`;
+  const descId = error || hint ? `${fieldId}-desc` : undefined;
+
+  // The label is a caption (not a <label htmlFor>), associated with the
+  // control via aria-labelledby. This keeps clicks/hover on the label — or
+  // the empty space beside it — from ever focusing or opening the control.
+  const control = React.Children.map(children, (child) => {
+    if (!React.isValidElement(child)) return child;
+    const props = child.props as {
+      id?: string;
+      "aria-labelledby"?: string;
+    };
+    return React.cloneElement(
+      child as React.ReactElement<Record<string, unknown>>,
+      {
+        id: props.id ?? fieldId,
+        "aria-labelledby": cn(labelId, props["aria-labelledby"]),
+        ...(descId ? { "aria-describedby": descId } : {}),
+        ...(error ? { "aria-invalid": true } : {}),
+      },
+    );
+  });
+
   return (
-    <div className={cn("flex flex-col gap-1.5", className)}>
-      <label
-        htmlFor={htmlFor}
-        className="text-[13px] font-medium text-ink"
+    <div className={cn("flex flex-col gap-2", className)}>
+      <span
+        id={labelId}
+        className={cn(
+          "flex w-fit items-center gap-1 px-3 font-display text-[14px] font-semibold leading-5 tracking-[-0.084px]",
+          error ? "text-field-error" : "text-field-label",
+        )}
       >
         {label}
-      </label>
-      {children}
+        {required && (
+          <span aria-hidden className="text-field-error">
+            *
+          </span>
+        )}
+      </span>
+      {control}
       {error ? (
-        <p className="text-xs text-danger">{error}</p>
+        <p id={descId} className="px-3 text-[12px] leading-4 text-field-error">
+          {error}
+        </p>
       ) : hint ? (
-        <p className="text-xs text-subtle">{hint}</p>
+        <p id={descId} className="px-3 text-[12px] leading-4 text-field-hint">
+          {hint}
+        </p>
       ) : null}
     </div>
   );
 }
 
-const CONTROL =
-  "focus-ring h-10 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm text-ink placeholder:text-subtle transition-colors hover:border-secondary";
+/* --------------------------- Shared control style --------------------------- */
+// Figma input: white fill, 2px secondary-tinted border, 12px radius, Inter
+// Medium. `md` is the brand spec (large form fields); `sm` is a compact
+// variant for toolbar filters that keeps the same brand language.
+export type ControlSize = "md" | "sm";
+
+const BASE =
+  "focus-ring w-full border-2 border-field-border bg-surface font-medium text-ink placeholder:text-field-placeholder transition-colors hover:border-secondary aria-[invalid=true]:border-field-error disabled:cursor-not-allowed disabled:opacity-60";
+
+const SIZES: Record<ControlSize, string> = {
+  md: "rounded-[12px] px-4 py-3 text-[15px] leading-6",
+  sm: "rounded-[10px] px-3 py-2 text-sm leading-5",
+};
+
+export function controlClasses(size: ControlSize = "md", className?: string) {
+  return cn(BASE, SIZES[size], className);
+}
 
 export function Input({
+  size = "md",
   className,
   ...props
-}: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cn(CONTROL, className)} {...props} />;
+}: Omit<React.InputHTMLAttributes<HTMLInputElement>, "size"> & {
+  size?: ControlSize;
+}) {
+  return <input className={controlClasses(size, className)} {...props} />;
 }
 
 export function Textarea({
+  size = "md",
   className,
   ...props
-}: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return (
-    <textarea
-      className={cn(CONTROL, "h-auto py-2.5 leading-relaxed", className)}
-      {...props}
-    />
-  );
-}
-
-type Option = { value: string; label: string };
-
-export function Select({
-  options,
-  placeholder,
-  className,
-  ...props
-}: React.SelectHTMLAttributes<HTMLSelectElement> & {
-  options: Option[];
-  placeholder?: string;
+}: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  size?: ControlSize;
 }) {
   return (
-    <div className="relative">
-      <select
-        className={cn(
-          CONTROL,
-          "appearance-none pr-9",
-          (props.value === "" || props.value === undefined) && placeholder
-            ? "text-subtle"
-            : "",
-          className,
-        )}
-        {...props}
-      >
-        {placeholder && (
-          <option value="" disabled>
-            {placeholder}
-          </option>
-        )}
-        {options.map((o) => (
-          <option key={o.value} value={o.value} className="text-ink">
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <svg
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle"
-        aria-hidden
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </div>
+    <textarea
+      className={controlClasses(size, cn("h-auto leading-relaxed", className))}
+      {...props}
+    />
   );
 }

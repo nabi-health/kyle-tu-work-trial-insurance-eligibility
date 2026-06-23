@@ -1,27 +1,10 @@
-import Link from "next/link";
+import { DashboardCharacters } from "@/components/brand/DashboardCharacters";
+import { DashboardChatHero } from "@/components/chat/DashboardChatHero";
 import { Card } from "@/components/ui/Card";
 import { PageBody, PageHeader } from "@/components/ui/PageHeader";
 import { listRules } from "@/lib/rules/repository";
 
 export const dynamic = "force-dynamic";
-
-const QUICK_LINKS = [
-  {
-    href: "/check",
-    title: "Check eligibility",
-    body: "Enter a patient's insurance details and get a clear answer.",
-  },
-  {
-    href: "/coverage",
-    title: "Coverage overview",
-    body: "See what Nabi services by payer, plan structure, and state.",
-  },
-  {
-    href: "/rules",
-    title: "Manage rules",
-    body: "Search, create, edit, and correct the registry rules.",
-  },
-];
 
 export default async function DashboardPage() {
   const rules = await listRules();
@@ -58,33 +41,14 @@ export default async function DashboardPage() {
               <p className="font-display text-3xl font-semibold text-primary">
                 {s.value}
               </p>
-              <p className="mt-1 text-sm text-muted">{s.label}</p>
+              <p className="mt-1 type-body-sm text-muted">{s.label}</p>
             </Card>
           ))}
         </section>
 
-        <section>
-          <h2 className="mb-3 font-display text-lg font-semibold text-ink">
-            Jump in
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-3">
-            {QUICK_LINKS.map((q) => (
-              <Link key={q.href} href={q.href} className="group">
-                <Card className="h-full px-5 py-5 transition-colors hover:border-secondary hover:bg-cream">
-                  <div className="flex items-center justify-between">
-                    <p className="font-display text-base font-semibold text-ink">
-                      {q.title}
-                    </p>
-                    <span className="text-primary transition-transform group-hover:translate-x-0.5">
-                      →
-                    </span>
-                  </div>
-                  <p className="mt-1.5 text-sm text-muted">{q.body}</p>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        </section>
+        <DashboardChatHero />
+
+        <DashboardCharacters />
       </PageBody>
     </>
   );

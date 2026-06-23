@@ -13,14 +13,22 @@ const isWildcard = (v: string) => v.trim() === "" || v.trim() === WILDCARD;
 
 const norm = (v: string) => v.trim().toLowerCase();
 
-/** A single-value rule field matches the query value (wildcard = any). */
+/**
+ * A single-value rule field matches the query value. A wildcard on either side
+ * is "any": a wildcard rule applies to every query, and a wildcard query (e.g.
+ * the coverage matrix "All" filters) spans every rule in that dimension.
+ */
 function fieldMatches(ruleValue: string, queryValue: string): boolean {
-  return isWildcard(ruleValue) || norm(ruleValue) === norm(queryValue);
+  return (
+    isWildcard(ruleValue) ||
+    isWildcard(queryValue) ||
+    norm(ruleValue) === norm(queryValue)
+  );
 }
 
 /** service_state is a CSV list (e.g. "CA,WA"); membership = match. */
 function stateMatches(ruleState: string, queryState: string): boolean {
-  if (isWildcard(ruleState)) return true;
+  if (isWildcard(ruleState) || isWildcard(queryState)) return true;
   const q = norm(queryState);
   return ruleState.split(",").some((s) => norm(s) === q);
 }

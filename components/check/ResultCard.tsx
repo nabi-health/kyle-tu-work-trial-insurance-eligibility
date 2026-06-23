@@ -2,52 +2,99 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { NabiCharacter, type NabiName } from "@/components/brand/NabiCharacter";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { RuleOutcomeMatrix } from "@/components/check/RuleOutcomeMatrix";
+import { RuleSummary } from "@/components/rules/RuleSummary";
+import { display, stateScope, stripId } from "@/components/rules/rule-helpers";
+import { cn } from "@/lib/cn";
 import { OUTCOME_KEYS, OUTCOME_LABELS } from "@/lib/eligibility/constants";
+import { explainDecision } from "@/lib/eligibility/explain";
 import {
   DECISION_DISPLAY,
   outcomeTone,
 } from "@/lib/eligibility/presentation";
-import type { EligibilityResult, Rule } from "@/lib/eligibility/types";
+import type { Decision, EligibilityResult, Rule } from "@/lib/eligibility/types";
 
-const field = (v: string) => (v.trim() === "" || v.trim() === "*" ? "Any" : v);
+// Which Nabi companion delivers each decision. Ines (steady) carries the clear
+// yes; Emi (empathy) softens the no; Caleb (curious) fronts the pending /
+// uncertain answers that still need a question answered.
+const DECISION_CHARACTER: Record<Decision, NabiName> = {
+  guarantee: "ines",
+  guarantee_after_referral: "caleb",
+  not_eligible: "emi",
+  needs_research: "caleb",
+};
 
-function RuleLine({ rule, driver }: { rule: Rule; driver?: boolean }) {
+function RuleLine({ rule }: { rule: Rule }) {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-line bg-cream/60 px-3 py-2.5">
-      <div className="min-w-0 text-sm">
-        <span className="font-medium text-ink">{field(rule.payer_group)}</span>
-        <span className="text-subtle">
-          {" · "}
-          {field(rule.plan_type)} · {field(rule.plan_structure)} ·{" "}
-          {field(rule.service_state)}
-        </span>
-        {driver && (
-          <Badge tone="info" className="ml-2 align-middle">
-            drove result
-          </Badge>
-        )}
+    <div className="rounded-xl border border-line bg-surface">
+      <div className="flex items-center justify-between gap-3 px-4 py-3">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+        >
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={cn(
+              "h-4 w-4 shrink-0 text-subtle transition-transform",
+              open && "rotate-180",
+            )}
+            aria-hidden
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+          <span className="min-w-0">
+            <span className="block truncate type-label-sm text-ink">
+              {display(rule.payer_group)}
+            </span>
+            <span className="mt-0.5 block truncate type-body-xs text-subtle">
+              {display(rule.plan_type)} · {display(rule.plan_structure)} ·{" "}
+              {stateScope(rule.service_state)}
+            </span>
+          </span>
+        </button>
+        <Link
+          href={`/rules/${rule.id}/edit?from=check`}
+          className="shrink-0 type-label-sm text-primary hover:underline"
+        >
+          Edit rule →
+        </Link>
       </div>
-      <Link
-        href={`/rules/${rule.id}?from=check`}
-        className="shrink-0 text-[13px] font-medium text-primary hover:underline"
-      >
-        Edit rule →
-      </Link>
+      {open && (
+        <div className="border-t border-line px-4 py-4">
+          <RuleSummary data={stripId(rule)} />
+        </div>
+      )}
     </div>
   );
 }
 
 export function ResultCard({ result }: { result: EligibilityResult }) {
-  const [showRules, setShowRules] = useState(false);
   const decision = DECISION_DISPLAY[result.decision];
 
   const driverIds = new Set(
     OUTCOME_KEYS.flatMap((k) => result.outcomes[k].drivingRuleIds),
   );
   const driverRules = result.matchedRules.filter((r) => driverIds.has(r.id));
+
+  // Pre-fill a new rule with the exact inputs the user just checked, so the
+  // no-match correction path lands on a form that's already scoped correctly.
+  const newRuleHref = `/rules/new?${new URLSearchParams({
+    payer_group: result.query.payer_group,
+    plan_type: result.query.plan_type,
+    plan_structure: result.query.plan_structure,
+    service_state: result.query.service_state,
+  }).toString()}`;
 
   return (
     <Card className="animate-result overflow-hidden">
@@ -61,26 +108,25 @@ export function ResultCard({ result }: { result: EligibilityResult }) {
               : "bg-warning-bg"
         }`}
       >
-        <span
-          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-lg font-bold text-white ${
-            decision.tone === "success"
-              ? "bg-success"
-              : decision.tone === "danger"
-                ? "bg-danger"
-                : "bg-warning"
-          }`}
-          aria-hidden
-        >
-          {decision.icon}
-        </span>
+        <NabiCharacter
+          name={DECISION_CHARACTER[result.decision]}
+          size={44}
+          title={decision.label}
+          className="mt-0.5 shrink-0"
+        />
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <p className="type-subhead-2xs text-muted">
             Decision
           </p>
-          <h2 className="font-display text-xl font-semibold text-ink">
+          <h2 className="type-title-h6 text-ink">
             {decision.label}
           </h2>
-          <p className="mt-0.5 text-sm text-muted">{decision.blurb}</p>
+          <p className="mt-0.5 type-body-sm text-muted">{decision.blurb}</p>
+          {result.hasMatch && (
+            <p className="mt-2 type-body-sm font-medium text-ink">
+              {explainDecision(result)}
+            </p>
+          )}
         </div>
       </div>
 
@@ -88,7 +134,7 @@ export function ResultCard({ result }: { result: EligibilityResult }) {
       <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-4">
         {OUTCOME_KEYS.map((key) => (
           <div key={key} className="bg-surface px-4 py-4">
-            <p className="text-xs font-medium text-subtle">
+            <p className="type-label-xs text-subtle">
               {OUTCOME_LABELS[key]}
             </p>
             <div className="mt-2">
@@ -102,47 +148,52 @@ export function ResultCard({ result }: { result: EligibilityResult }) {
 
       {/* Explanation + correction CTA */}
       <div className="border-t border-line px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm text-muted">
-            {result.hasMatch
-              ? `Aggregated from ${result.matchedRules.length} matching rule${
-                  result.matchedRules.length > 1 ? "s" : ""
-                }.`
-              : "No rule matched these inputs, so every outcome defaults to Needs Review."}
-          </p>
-          <div className="flex items-center gap-2">
-            {result.matchedRules.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowRules((s) => !s)}
-              >
-                {showRules ? "Hide rules" : "Show matching rules"}
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setShowRules(true)}
-            >
-              This looks wrong
-            </Button>
-          </div>
-        </div>
+        <p className="type-body-sm text-muted">
+          {result.hasMatch
+            ? `Aggregated from ${result.matchedRules.length} matching rule${
+                result.matchedRules.length > 1 ? "s" : ""
+              }.`
+            : "No rule matched these inputs, so every outcome defaults to Needs Review."}
+        </p>
 
-        {showRules && (
-          <div className="mt-4 flex flex-col gap-4">
+        <div className="mt-4 flex flex-col gap-4">
+            {!result.hasMatch && (
+              <div className="rounded-xl border border-line bg-cream/60 px-4 py-3">
+                <p className="type-label-sm text-ink">
+                  No rule covers these inputs
+                </p>
+                <p className="mt-1 type-body-sm text-muted">
+                  The result defaults to Needs Review because nothing in the
+                  registry matches. Add a rule for this combination so future
+                  checks return a real answer.
+                </p>
+                <Link
+                  href={newRuleHref}
+                  className="mt-2 inline-block type-label-sm text-primary hover:underline"
+                >
+                  Create a rule for these inputs →
+                </Link>
+              </div>
+            )}
+            {result.matchedRules.length > 0 && (
+              <div>
+                <p className="mb-2 type-label-sm text-ink">
+                  How each rule contributed
+                </p>
+                <RuleOutcomeMatrix result={result} />
+              </div>
+            )}
             {driverRules.length > 0 && (
               <div>
-                <p className="mb-2 text-[13px] font-semibold text-ink">
+                <p className="mb-2 type-label-sm text-ink">
                   Rules behind this result
                 </p>
                 <div className="flex flex-col gap-2">
                   {driverRules.map((r) => (
-                    <RuleLine key={r.id} rule={r} driver />
+                    <RuleLine key={r.id} rule={r} />
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-subtle">
+                <p className="mt-2 type-body-xs text-subtle">
                   If the answer is wrong, edit the driving rule above — changes
                   apply to every future check immediately.
                 </p>
@@ -150,7 +201,7 @@ export function ResultCard({ result }: { result: EligibilityResult }) {
             )}
             {result.matchedRules.length > driverRules.length && (
               <div>
-                <p className="mb-2 text-[13px] font-semibold text-ink">
+                <p className="mb-2 type-label-sm text-ink">
                   Other matching rules
                 </p>
                 <div className="flex flex-col gap-2">
@@ -163,7 +214,6 @@ export function ResultCard({ result }: { result: EligibilityResult }) {
               </div>
             )}
           </div>
-        )}
       </div>
     </Card>
   );

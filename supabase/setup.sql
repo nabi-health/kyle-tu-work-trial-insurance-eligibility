@@ -123,3 +123,76 @@ insert into rules (payer_group, payer_id, plan_type, group_number, plan_structur
   ('Aetna', '*', 'Commercial', '*', 'PPO', 'WA', 'Yes', 'No', 'No', 'Yes', '', '', ''),
   ('Oxford (UnitedHealthcare/Oxford)', '06111', 'Commercial', '*', 'PPO', 'WA', 'Yes', 'No', 'No', 'Needs Review', '', '', ''),
   ('Oxford (UnitedHealthcare/Oxford) Liberty Network', '06111', 'Commercial', '*', 'EPO', 'WA', 'Needs Review', 'Needs Review', 'Needs Review', 'Needs Review', 'December 5, 2025', 'Nikki M', 'We are OON w/Liberty Network. May still have OON benefits available. Needs review.');
+
+-- ----------------------------------------------------------------------------
+-- Assistant chat history. One row per saved conversation, scoped by user name.
+-- (This tool has no real auth — the user's name is the editable identity, the
+--  same one stamped as `verified_by` on rule saves.) `messages` is the full
+--  ChatMessage[] transcript as JSON.
+-- ----------------------------------------------------------------------------
+create table if not exists assistant_chats (
+  id         text primary key,
+  user_name  text not null default '',
+  title      text not null default 'New chat',
+  messages   jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists assistant_chats_user_idx
+  on assistant_chats (user_name, updated_at desc);
+
+drop trigger if exists assistant_chats_set_updated_at on assistant_chats;
+create trigger assistant_chats_set_updated_at
+  before update on assistant_chats
+  for each row execute function set_updated_at();
+
+alter table assistant_chats enable row level security;
+drop policy if exists "public access" on assistant_chats;
+create policy "public access" on assistant_chats for all to anon, authenticated using (true) with check (true);
+
+grant all on assistant_chats to anon, authenticated;
+
+-- ----------------------------------------------------------------------------
+-- Eligibility tests. Saved input → expected-output cases, re-run against the
+-- live registry whenever a rule changes. The four inputs mirror the checker;
+-- the four expected_* columns are the asserted outcomes.
+-- ----------------------------------------------------------------------------
+create table if not exists eligibility_tests (
+  id                             uuid primary key default gen_random_uuid(),
+  name                           text not null default '',
+  payer_group                    text not null default '',
+  plan_type                      text not null default '',
+  plan_structure                 text not null default '',
+  service_state                  text not null default '',
+  expected_serviceable           text not null default '',
+  expected_pre_auth_required     text not null default '',
+  expected_referral_required     text not null default '',
+  expected_preventative_coverage text not null default '',
+  notes                          text not null default '',
+  created_at                     timestamptz not null default now(),
+  updated_at                     timestamptz not null default now()
+);
+
+create index if not exists eligibility_tests_created_at_idx
+  on eligibility_tests (created_at);
+
+drop trigger if exists eligibility_tests_set_updated_at on eligibility_tests;
+create trigger eligibility_tests_set_updated_at
+  before update on eligibility_tests
+  for each row execute function set_updated_at();
+
+alter table eligibility_tests enable row level security;
+drop policy if exists "public access" on eligibility_tests;
+create policy "public access" on eligibility_tests for all to anon, authenticated using (true) with check (true);
+
+grant all on eligibility_tests to anon, authenticated;
+
+-- Seed the starting test cases (idempotent: clears first, like rules above).
+delete from eligibility_tests;
+insert into eligibility_tests
+  (name, payer_group, plan_type, plan_structure, service_state,
+   expected_serviceable, expected_pre_auth_required, expected_referral_required, expected_preventative_coverage, notes) values
+  ('Happy Path — Serviceable', 'Cigna', 'Commercial', 'PPO', 'WA', 'Yes', 'No', 'No', 'Yes', 'Cigna has a broad wildcard rule. Tests simple matching with a clear yes.'),
+  ('California — Referral Required', 'Aetna', 'Commercial', 'PPO', 'CA', 'Yes', 'No', 'CA Referral', 'Yes', 'Aetna Commercial PPO is serviceable, but the CA wildcard rule overrides referral to "CA Referral". Tests state-specific rule layering.'),
+  ('Blocked State — Not Serviceable', 'Aetna', 'Commercial', 'PPO', 'OH', 'No', 'No', 'No', 'No', 'Ohio is in the global blocked-states list. Even though Aetna PPO is normally serviceable, the state block overrides. Tests rule priority/specificity.');

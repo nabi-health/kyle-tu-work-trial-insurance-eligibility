@@ -1,25 +1,48 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
+import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { Field, Input, Select } from "@/components/ui/Field";
-import { evaluate } from "@/lib/eligibility/engine";
-import {
-  PLAN_STRUCTURES,
-  PLAN_TYPES,
-  US_STATES,
-} from "@/lib/eligibility/constants";
-import { DECISION_DISPLAY } from "@/lib/eligibility/presentation";
-import type { Rule } from "@/lib/eligibility/types";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Field } from "@/components/ui/Field";
+import { MatrixTable, type MatrixColumn } from "@/components/ui/MatrixTable";
+import { PLAN_TYPES, US_STATES } from "@/lib/eligibility/constants";
+import { outcomeTone } from "@/lib/eligibility/presentation";
+import { type OutcomeKey, type Rule, WILDCARD } from "@/lib/eligibility/types";
 
 const opts = (values: string[]) => values.map((v) => ({ value: v, label: v }));
 
-const CELL: Record<string, string> = {
-  Yes: "bg-success-bg text-success",
-  No: "bg-danger-bg text-danger",
-  "Needs Review": "bg-warning-bg text-warning",
-};
-const SHORT: Record<string, string> = { Yes: "Yes", No: "No", "Needs Review": "Review" };
+const isWild = (v: string) => v.trim() === "" || v.trim() === WILDCARD;
+
+/**
+ * Filter semantics for one dimension, with three distinct selections:
+ *   ""  → "None": no filter, every rule passes (the default — returns all data).
+ *   "*" → the wildcard option ("All states" etc.): passes only rules whose own
+ *         value is the wildcard (the broad baseline rules).
+ *   else → a concrete value: exact match (or CSV membership for the state list),
+ *         excluding wildcard baseline rows.
+ */
+function fieldPass(ruleValue: string, filter: string, isList = false): boolean {
+  if (filter === "") return true; // None
+  if (filter === WILDCARD) return isWild(ruleValue); // All — rule is wildcard
+  if (isWild(ruleValue)) return false; // concrete filter excludes wildcards
+  if (isList) return ruleValue.split(",").some((s) => s.trim() === filter);
+  return ruleValue.trim() === filter;
+}
+
+// Render a rule dimension: a wildcard reads as a muted "Any …" baseline label,
+// a concrete value passes through verbatim.
+const dimCell = (v: string, anyLabel = "Any"): ReactNode =>
+  isWild(v) ? <span className="text-muted">{anyLabel}</span> : v;
+
+// The four eligibility outcomes, shown as their raw per-rule values (no
+// aggregation) so nothing is collapsed away.
+const OUTCOME_COLS: { key: OutcomeKey; header: string }[] = [
+  { key: "serviceable", header: "Serviceable" },
+  { key: "pre_auth_required", header: "Pre-auth" },
+  { key: "referral_required", header: "Referral" },
+  { key: "preventative_coverage", header: "Preventative" },
+];
 
 export function CoverageMatrix({
   rules,
@@ -28,138 +51,164 @@ export function CoverageMatrix({
   rules: Rule[];
   payerGroups: string[];
 }) {
-  const [state, setState] = useState("WA");
-  const [planType, setPlanType] = useState("Commercial");
+  // All three default to "None" (empty) so the table opens showing every rule.
+  const [state, setState] = useState("");
+  const [planType, setPlanType] = useState("");
   const [payerFilter, setPayerFilter] = useState("");
 
-  // "Any payer" baseline row first, then concrete payers.
-  const rows = useMemo(() => {
-    const filtered = payerGroups.filter((p) =>
-      p.toLowerCase().includes(payerFilter.trim().toLowerCase()),
-    );
-    return ["*", ...filtered];
-  }, [payerGroups, payerFilter]);
+  // Each filter offers None, the wildcard ("All …"), then the concrete values.
+  const stateOptions = useMemo(
+    () => [
+      { value: "", label: "None" },
+      { value: WILDCARD, label: "All states" },
+      ...opts(US_STATES),
+    ],
+    [],
+  );
+  const planTypeOptions = useMemo(
+    () => [
+      { value: "", label: "None" },
+      { value: WILDCARD, label: "All plan types" },
+      ...opts(PLAN_TYPES),
+    ],
+    [],
+  );
+  const payerOptions = useMemo(
+    () => [
+      { value: "", label: "None" },
+      { value: WILDCARD, label: "All payers" },
+      ...payerGroups
+        .filter((p) => !isWild(p))
+        .map((p) => ({ value: p, label: p })),
+    ],
+    [payerGroups],
+  );
 
-  const grid = useMemo(() => {
-    return rows.map((payer) => ({
-      payer,
-      cells: PLAN_STRUCTURES.map((structure) => {
-        const result = evaluate(
-          {
-            payer_group: payer,
-            plan_type: planType,
-            plan_structure: structure,
-            service_state: state,
-          },
-          rules,
-        );
-        return {
-          structure,
-          serviceable: result.outcomes.serviceable.value,
-          decision: result.decision,
-          referral: result.outcomes.referral_required.value,
-          preauth: result.outcomes.pre_auth_required.value,
-          preventative: result.outcomes.preventative_coverage.value,
-        };
-      }),
-    }));
-  }, [rows, rules, planType, state]);
+  const visible = useMemo(
+    () =>
+      rules.filter(
+        (r) =>
+          fieldPass(r.service_state, state, true) &&
+          fieldPass(r.plan_type, planType) &&
+          fieldPass(r.payer_group, payerFilter),
+      ),
+    [rules, state, planType, payerFilter],
+  );
+
+  const columns = useMemo<MatrixColumn<Rule>[]>(
+    () => [
+      {
+        key: "payer_group",
+        header: "Payer",
+        align: "left",
+        clip: true,
+        sortValue: (r) => (isWild(r.payer_group) ? "" : r.payer_group),
+        cell: (r) => dimCell(r.payer_group, "Any payer"),
+      },
+      {
+        key: "plan_type",
+        header: "Plan type",
+        align: "left",
+        sortValue: (r) => (isWild(r.plan_type) ? "" : r.plan_type),
+        cell: (r) => dimCell(r.plan_type),
+      },
+      {
+        key: "plan_structure",
+        header: "Structure",
+        align: "left",
+        sortValue: (r) => (isWild(r.plan_structure) ? "" : r.plan_structure),
+        cell: (r) => dimCell(r.plan_structure),
+      },
+      {
+        key: "service_state",
+        header: "State(s)",
+        align: "left",
+        clip: true,
+        sortValue: (r) => (isWild(r.service_state) ? "" : r.service_state),
+        cell: (r) => dimCell(r.service_state, "All states"),
+      },
+      ...OUTCOME_COLS.map<MatrixColumn<Rule>>(({ key, header }) => ({
+        key,
+        header,
+        align: "center",
+        sortValue: (r) => r[key],
+        cell: (r) =>
+          isWild(r[key]) ? (
+            <span className="text-subtle">—</span>
+          ) : (
+            <Badge tone={outcomeTone(key, r[key])}>{r[key]}</Badge>
+          ),
+      })),
+    ],
+    [],
+  );
 
   const summary = useMemo(() => {
     let yes = 0,
-      no = 0,
-      review = 0;
-    for (const r of grid)
-      for (const c of r.cells) {
-        if (c.serviceable === "Yes") yes++;
-        else if (c.serviceable === "No") no++;
-        else review++;
-      }
-    return { yes, no, review, total: yes + no + review };
-  }, [grid]);
+      no = 0;
+    for (const r of visible) {
+      if (r.serviceable === "Yes") yes++;
+      else if (r.serviceable === "No") no++;
+    }
+    return { yes, no, total: visible.length };
+  }, [visible]);
+
+  // Human-readable description of the active filters for the summary captions.
+  const labelFor = (v: string, allLabel: string) =>
+    v === "" ? null : v === WILDCARD ? allLabel : v;
+  const activeFilters =
+    [
+      labelFor(payerFilter, "All payers"),
+      labelFor(planType, "All plan types"),
+      labelFor(state, "All states"),
+    ]
+      .filter(Boolean)
+      .join(" · ") || "no filters";
 
   return (
     <div className="flex flex-col gap-5">
-      {/* Controls */}
+      {/* Filters — each defaults to "None" (no filter). "All …" selects the
+          wildcard baseline rows specifically. */}
       <div className="flex flex-wrap items-end gap-3">
-        <Field label="State" className="w-36">
-          <Select options={opts(US_STATES)} value={state}
-            onChange={(e) => setState(e.target.value)} />
+        <Field label="State" className="w-48">
+          <Dropdown size="sm" options={stateOptions} value={state}
+            onChange={setState} />
         </Field>
-        <Field label="Plan type" className="w-44">
-          <Select options={opts(PLAN_TYPES)} value={planType}
-            onChange={(e) => setPlanType(e.target.value)} />
+        <Field label="Plan type" className="w-52">
+          <Dropdown size="sm" options={planTypeOptions} value={planType}
+            onChange={setPlanType} />
         </Field>
-        <Field label="Filter payers" className="w-56">
-          <Input placeholder="Search payer…" value={payerFilter}
-            onChange={(e) => setPayerFilter(e.target.value)} />
+        <Field label="Payer" className="w-56">
+          <Dropdown size="sm" options={payerOptions} value={payerFilter}
+            placeholder="Search payer…" onChange={setPayerFilter} />
         </Field>
       </div>
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3 sm:max-w-xl">
         {[
+          { label: "Rules shown", value: summary.total, tone: "text-ink" },
           { label: "Serviceable", value: summary.yes, tone: "text-success" },
           { label: "Not serviceable", value: summary.no, tone: "text-danger" },
-          { label: "Needs review", value: summary.review, tone: "text-warning" },
         ].map((s) => (
           <Card key={s.label} className="px-4 py-3">
             <p className={`font-display text-2xl font-semibold ${s.tone}`}>
               {s.value}
             </p>
-            <p className="text-xs text-muted">
-              {s.label} · {planType} in {state}
+            <p className="type-body-xs text-muted">
+              {s.label} · {activeFilters}
             </p>
           </Card>
         ))}
       </div>
 
-      {/* Matrix */}
-      <div className="scroll-area max-h-[60vh] overflow-auto rounded-2xl border border-line bg-surface">
-        <table className="w-full border-collapse text-sm">
-          <thead className="sticky top-0 z-10">
-            <tr className="bg-cream text-left text-xs">
-              <th className="sticky left-0 z-20 bg-cream px-4 py-3 font-medium text-muted">
-                Payer
-              </th>
-              {PLAN_STRUCTURES.map((s) => (
-                <th key={s} className="px-4 py-3 text-center font-medium text-muted">
-                  {s}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {grid.map((row) => (
-              <tr key={row.payer} className="border-t border-line">
-                <th className="sticky left-0 z-10 bg-surface px-4 py-2.5 text-left font-medium text-ink">
-                  {row.payer === "*" ? (
-                    <span className="text-muted">Any payer (baseline)</span>
-                  ) : (
-                    row.payer
-                  )}
-                </th>
-                {row.cells.map((c) => (
-                  <td key={c.structure} className="px-2 py-2 text-center">
-                    <span
-                      title={`${DECISION_DISPLAY[c.decision].label} — referral ${c.referral}, pre-auth ${c.preauth}, preventative ${c.preventative}`}
-                      className={`inline-block min-w-[58px] rounded-lg px-2 py-1 text-xs font-medium ${
-                        CELL[c.serviceable] ?? "bg-cream text-muted"
-                      }`}
-                    >
-                      {SHORT[c.serviceable] ?? c.serviceable}
-                    </span>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <p className="text-xs text-subtle">
-        Each cell shows serviceability for {planType} plans in {state}. Hover a
-        cell for the full decision, referral, pre-auth and preventative outcomes.
-      </p>
+      {/* Every matching rule, one row per rule — no aggregation. */}
+      <MatrixTable
+        rows={visible}
+        columns={columns}
+        rowKey={(r) => r.id}
+        emptyMessage="No rules match these filters."
+      />
     </div>
   );
 }

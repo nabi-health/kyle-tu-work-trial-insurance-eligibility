@@ -34,6 +34,23 @@ export interface Rule extends RuleFields {
   id: string;
 }
 
+export type AuditAction = "create" | "update" | "delete";
+
+/** One recorded change to a rule (the `audit_log` table). */
+export interface AuditEntry {
+  id: string;
+  rule_id: string;
+  action: AuditAction;
+  /** Who made the change. */
+  actor: string;
+  /** Field snapshot before the change (null for a create). */
+  before: RuleFields | null;
+  /** Field snapshot after the change (null for a delete). */
+  after: RuleFields | null;
+  /** ISO timestamp of when the change happened. */
+  created_at: string;
+}
+
 /** The four inputs collected by the eligibility checker form. */
 export interface EligibilityQuery {
   payer_group: string;

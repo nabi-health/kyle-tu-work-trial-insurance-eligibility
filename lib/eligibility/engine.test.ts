@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import registryData from "../../registry.json";
-import { decide, evaluate } from "./engine";
+import { decide, evaluate, matchRules } from "./engine";
 import type { EligibilityQuery, Rule, RuleFields } from "./types";
 
 /** Seed dataset with stable ids, exactly as the repository loads it. */
@@ -227,5 +227,28 @@ describe("decision logic", () => {
   it("uncertainty → needs research", () => {
     expect(mk("Needs Review", "No", "Yes")).toBe("needs_research");
     expect(mk("Yes", "Unknown", "Yes")).toBe("needs_research");
+  });
+});
+
+describe("wildcard query filters (coverage 'All' option)", () => {
+  const base = {
+    payer_group: "Aetna",
+    plan_structure: "PPO",
+    plan_type: "Commercial",
+    service_state: "WA",
+  };
+
+  it("a wildcard service_state spans every state's rules", () => {
+    const wa = matchRules(base, REGISTRY);
+    const allStates = matchRules({ ...base, service_state: "*" }, REGISTRY);
+    expect(allStates.length).toBeGreaterThanOrEqual(wa.length);
+    expect(allStates).toEqual(expect.arrayContaining(wa));
+  });
+
+  it("a wildcard plan_type spans every plan type's rules", () => {
+    const commercial = matchRules(base, REGISTRY);
+    const allTypes = matchRules({ ...base, plan_type: "*" }, REGISTRY);
+    expect(allTypes.length).toBeGreaterThanOrEqual(commercial.length);
+    expect(allTypes).toEqual(expect.arrayContaining(commercial));
   });
 });

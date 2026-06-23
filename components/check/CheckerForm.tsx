@@ -4,7 +4,8 @@ import { useState, useTransition } from "react";
 import { checkEligibility } from "@/app/check/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardBody } from "@/components/ui/Card";
-import { Field, Select } from "@/components/ui/Field";
+import { Dropdown } from "@/components/ui/Dropdown";
+import { Field } from "@/components/ui/Field";
 import { PLAN_STRUCTURES, PLAN_TYPES, US_STATES } from "@/lib/eligibility/constants";
 import type { EligibilityQuery, EligibilityResult } from "@/lib/eligibility/types";
 import { ResultCard } from "./ResultCard";
@@ -44,43 +45,43 @@ export function CheckerForm({ payerGroups }: { payerGroups: string[] }) {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,360px)_minmax(0,1fr)]">
-      <Card>
+      <Card className="lg:self-start">
         <CardBody>
           <form onSubmit={submit} className="flex flex-col gap-4">
             <Field label="Payer" htmlFor="payer_group">
-              <Select
+              <Dropdown
                 id="payer_group"
                 placeholder="Select a payer"
                 options={opts(payerGroups)}
                 value={query.payer_group}
-                onChange={(e) => set("payer_group", e.target.value)}
+                onChange={(v) => set("payer_group", v)}
               />
             </Field>
             <Field label="Plan Type" htmlFor="plan_type">
-              <Select
+              <Dropdown
                 id="plan_type"
                 placeholder="Select a plan type"
                 options={opts(PLAN_TYPES)}
                 value={query.plan_type}
-                onChange={(e) => set("plan_type", e.target.value)}
+                onChange={(v) => set("plan_type", v)}
               />
             </Field>
             <Field label="Plan Structure" htmlFor="plan_structure">
-              <Select
+              <Dropdown
                 id="plan_structure"
                 placeholder="Select a plan structure"
                 options={opts(PLAN_STRUCTURES)}
                 value={query.plan_structure}
-                onChange={(e) => set("plan_structure", e.target.value)}
+                onChange={(v) => set("plan_structure", v)}
               />
             </Field>
             <Field label="State" htmlFor="service_state">
-              <Select
+              <Dropdown
                 id="service_state"
                 placeholder="Select a state"
                 options={opts(US_STATES)}
                 value={query.service_state}
-                onChange={(e) => set("service_state", e.target.value)}
+                onChange={(v) => set("service_state", v)}
               />
             </Field>
 
@@ -111,10 +112,10 @@ export function CheckerForm({ payerGroups }: { payerGroups: string[] }) {
         ) : (
           <Card className="flex h-full min-h-[280px] items-center justify-center border-dashed">
             <div className="max-w-xs px-6 text-center">
-              <p className="font-display text-lg font-semibold text-ink">
+              <p className="type-title-h6 text-ink">
                 Check a patient&apos;s coverage
               </p>
-              <p className="mt-1 text-sm text-muted">
+              <p className="mt-1 type-body-sm text-muted">
                 Enter the insurance details on the left to see whether Nabi can
                 see this patient — and why.
               </p>

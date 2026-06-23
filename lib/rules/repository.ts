@@ -1,9 +1,16 @@
 import "server-only";
 import seedData from "../../registry.json";
 import { getSupabaseAdmin } from "@/lib/supabase/server";
-import type { Rule, RuleFields } from "@/lib/eligibility/types";
+import type {
+  AuditAction,
+  AuditEntry,
+  Rule,
+  RuleFields,
+} from "@/lib/eligibility/types";
 
 const TABLE = "rules";
+
+const AUDIT_COLUMNS = "id,rule_id,action,actor,before,after,created_at";
 
 const RULE_COLUMNS =
   "id,payer_group,payer_id,plan_type,group_number,plan_structure,service_state,serviceable,pre_auth_required,referral_required,preventative_coverage,last_verified,verified_by,notes";
@@ -15,6 +22,7 @@ const RULE_COLUMNS =
  * Seeded from registry.json; mutations persist for the server lifetime.
  * ------------------------------------------------------------------ */
 let memory: Rule[] | null = null;
+const auditMemory: AuditEntry[] = [];
 let warnedFallback = false;
 
 function store(): Rule[] {
@@ -95,6 +103,7 @@ export async function createRule(fields: RuleFields): Promise<Rule> {
   }
   const rule: Rule = { ...fields, id: crypto.randomUUID() };
   store().push(rule);
+  await logAudit("create", rule.id, null, fields);
   return rule;
 }
 
@@ -119,7 +128,9 @@ export async function updateRule(id: string, fields: RuleFields): Promise<Rule> 
   const list = store();
   const i = list.findIndex((r) => r.id === id);
   if (i === -1) throw new Error("Rule not found");
+  const before = stripIdentity(list[i]);
   list[i] = { ...fields, id };
+  await logAudit("update", id, before, fields);
   return list[i];
 }
 
@@ -136,7 +147,16 @@ export async function deleteRule(id: string): Promise<void> {
       warnFallback("deleteRule", err);
     }
   }
+  const before = store().find((r) => r.id === id);
   memory = store().filter((r) => r.id !== id);
+  await logAudit("delete", id, before ? stripIdentity(before) : null, null);
+}
+
+/** Drop the synthetic id to get a bare field snapshot for the audit log. */
+function stripIdentity(rule: Rule): RuleFields {
+  const copy: Partial<Rule> = { ...rule };
+  delete copy.id;
+  return copy as RuleFields;
 }
 
 /** Distinct payer groups (excluding wildcard) for the checker dropdown. */
@@ -150,17 +170,56 @@ export async function listPayerGroups(): Promise<string[]> {
   return [...set].sort((a, b) => a.localeCompare(b));
 }
 
-async function logAudit(
-  action: "create" | "update" | "delete",
-  ruleId: string,
-  before: unknown,
-  after: unknown,
-): Promise<void> {
+/** Most-recent-first change history for one rule. */
+export async function listRuleHistory(ruleId: string): Promise<AuditEntry[]> {
   const db = getSupabaseAdmin();
-  if (!db) return;
-  // Best-effort: never let audit failures block the primary mutation.
-  await db
-    .from("audit_log")
-    .insert({ rule_id: ruleId, action, before, after })
-    .then(undefined, () => undefined);
+  if (!db) {
+    return auditMemory
+      .filter((e) => e.rule_id === ruleId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+  try {
+    const { data, error } = await db
+      .from("audit_log")
+      .select(AUDIT_COLUMNS)
+      .eq("rule_id", ruleId)
+      .order("created_at", { ascending: false });
+    if (error) throw new Error(error.message);
+    return (data ?? []) as AuditEntry[];
+  } catch (err) {
+    warnFallback("listRuleHistory", err);
+    return auditMemory
+      .filter((e) => e.rule_id === ruleId)
+      .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  }
+}
+
+async function logAudit(
+  action: AuditAction,
+  ruleId: string,
+  before: RuleFields | null,
+  after: RuleFields | null,
+): Promise<void> {
+  // "Who" — the saver stamps verified_by; fall back to the prior value, then a
+  // generic ops actor. (No real auth layer in this tool.)
+  const actor =
+    (after?.verified_by || before?.verified_by || "").trim() || "ops";
+  const db = getSupabaseAdmin();
+  if (db) {
+    // Best-effort: never let audit failures block the primary mutation.
+    await db
+      .from("audit_log")
+      .insert({ rule_id: ruleId, action, actor, before, after })
+      .then(undefined, () => undefined);
+    return;
+  }
+  auditMemory.push({
+    id: `audit-${auditMemory.length}`,
+    rule_id: ruleId,
+    action,
+    actor,
+    before,
+    after,
+    created_at: new Date().toISOString(),
+  });
 }
